@@ -768,7 +768,7 @@ select option { background: #111827; }
             <label>Dia do Vencimento *</label>
             <select id="f-dia" required>
               <option value="">Dia</option>
-              ${Array.from({length:31},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}
+
             </select>
           </div>
           <div class="form-group">
@@ -1284,6 +1284,14 @@ function currentMonthStr() {
   return `${y}-${m}`;
 }
 function init() {
+  // Popular dias 1-31 no select
+  const diaSelect = document.getElementById('f-dia');
+  for(let i = 1; i <= 31; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = i;
+    diaSelect.appendChild(opt);
+  }
   document.getElementById('f-inicio').value = currentMonthStr();
   currentMonth = new Date();
   renderList();
