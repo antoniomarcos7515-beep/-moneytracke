@@ -13,28 +13,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
-<!-- PWA Manifest inline -->
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
 <script>
-const manifestData = {
-  name: "MoneyTrack",
-  short_name: "MoneyTrack",
-  description: "Controle inteligente de parcelas",
-  start_url: "./",
-  display: "standalone",
-  background_color: "#0a0f1e",
-  theme_color: "#0a0f1e",
-  orientation: "portrait",
-  icons: [
-    { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%230a0f1e'/%3E%3Ccircle cx='96' cy='96' r='70' fill='none' stroke='%2300d4a0' stroke-width='8'/%3E%3Ctext x='96' y='120' font-family='Arial' font-size='72' font-weight='bold' fill='%2300d4a0' text-anchor='middle'%3E%24%3C/text%3E%3C/svg%3E", sizes: "192x192", type: "image/svg+xml" }
-  ]
-};
-const blob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
-const manifestURL = URL.createObjectURL(blob);
-document.addEventListener('DOMContentLoaded', () => {
-  const link = document.createElement('link');
-  link.rel = 'manifest'; link.href = manifestURL;
-  document.head.appendChild(link);
-});
+if('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+}
 </script>
 
 <style>
