@@ -327,6 +327,22 @@ header {
 }
 .pay-btn.skip:hover { background: rgba(245,200,66,0.08); }
 
+/* SKIPPED GHOST ROW — mês original que foi pulado */
+.inst-row-skipped-ghost {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
+  background: rgba(245,200,66,0.04);
+  border-radius: var(--radius-xs);
+}
+.inst-row-skipped-ghost:last-child { border-bottom: none; }
+.inst-num.ghost { background: rgba(245,200,66,0.12); color: var(--yellow); }
+.ghost-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  background: rgba(245,200,66,0.15); color: var(--yellow);
+  padding: 2px 8px; border-radius: 20px; letter-spacing: 0.3px;
+  margin-top: 3px;
+}
+
 /* Pay form skip option */
 .pay-form-skip-row {
   display: flex; align-items: center; gap: 8px;
@@ -1098,7 +1114,8 @@ function buildCard(p) {
       const paidTogether = inst.paidTogether ? ` <span style="font-size:10px;background:rgba(245,200,66,0.15);color:var(--yellow);padding:1px 6px;border-radius:10px;margin-left:4px">pago junto</span>` : '';
       dateLabel = `<span style="color:var(--emerald);font-weight:700">✓ Pago em ${fmtDate(inst.month,p.dueDay)}</span>${paidTogether}`;
     } else if(inst.skipped) {
-      dateLabel = `<span style="color:var(--yellow);font-weight:700">⏭ Pulado — adiado para o próximo mês</span>`;
+      // dateLabel usado na linha real (mês de pagamento = inst.month, que já foi deslocado)
+      dateLabel = `<span style="color:var(--text2);font-weight:600">${fmtDate(inst.month,p.dueDay)}</span>`;
     } else {
       dateLabel = `<span style="color:${s.cls==='late'?'var(--red)':'var(--text2)'}">${fmtDate(inst.month,p.dueDay)}</span>`;
     }
@@ -1118,9 +1135,24 @@ function buildCard(p) {
     if(inst.paid) {
       statusTxt = `<div class="inst-status-txt" style="color:var(--text3)">${fmt(inst.paidValue||p.installmentValue)}</div>`;
     } else if(inst.skipped) {
-      statusTxt = `<div class="inst-status-txt" style="color:var(--yellow)">Parcela adiada — será paga no próximo mês</div>`;
+      statusTxt = `<div class="inst-status-txt" style="color:var(--text3)">${s.label}</div>`;
     } else {
       statusTxt = `<div class="inst-status-txt" style="color:${s.cls==='late'?'var(--red)':'var(--text3)'}">${s.label}</div>`;
+    }
+
+    // Ghost row = linha amarela mostrando o mês original que foi pulado
+    let ghostRow = '';
+    if(inst.skipped && inst.skippedFrom) {
+      const originalDateLabel = fmtDate(inst.skippedFrom, p.dueDay);
+      ghostRow = `<div class="inst-row-skipped-ghost">
+        <div class="inst-num ghost">${idx+1}</div>
+        <div class="inst-info">
+          <div class="inst-date"><span style="color:var(--yellow);font-weight:700">⏭ Parcela pulada</span></div>
+          <div class="inst-status-txt"><span class="ghost-badge">Pagamento transferido para ${fmtDate(inst.month,p.dueDay)}</span></div>
+        </div>
+        <div class="inst-val" style="color:var(--yellow)">${fmt(p.installmentValue)}</div>
+        <div></div>
+      </div>`; 
     }
 
     let actionBtn = '';
@@ -1128,7 +1160,11 @@ function buildCard(p) {
       if(inst.paid) {
         actionBtn = `<button class="pay-btn unpay" onclick="unpayInstallment('${p.id}',${idx},event)">↩</button>`;
       } else if(inst.skipped) {
-        actionBtn = `<button class="pay-btn unpay" onclick="unskipInstallment('${p.id}',${idx},event)" title="Desfazer pulo">↩</button>`;
+        actionBtn = `
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+            <button class="pay-btn pay" onclick="togglePay('${p.id}',${idx},event)">✓ Pagar</button>
+            <button class="pay-btn unpay" onclick="unskipInstallment('${p.id}',${idx},event)" style="font-size:10px">↩ Desfazer</button>
+          </div>`;
       } else {
         actionBtn = `
           <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
@@ -1138,7 +1174,7 @@ function buildCard(p) {
       }
     }
 
-    return `${dividerHtml}<div id="inst-row-${p.id}-${idx}" class="inst-row ${inst.paid?'inst-row-paid':inst.skipped?'inst-row-skipped':''}">
+    return `${dividerHtml}${ghostRow}<div id="inst-row-${p.id}-${idx}" class="inst-row ${inst.paid?'inst-row-paid':inst.skipped?'inst-row-skipped':''}">
       <div class="inst-num ${s.cls}">${idx+1}</div>
       <div class="inst-info">
         <div class="inst-date">${dateLabel}</div>
@@ -1330,18 +1366,18 @@ function skipInstallment(id, idx, e) {
   const p = purchases.find(x=>x.id===id);
   if(!p) return;
 
-  // Mark current as skipped (stays in its original month, shown as yellow)
-  p.installments[idx].skipped = true;
-  p.installments[idx].paid = false;
-
-  // Shift this installment AND all following unpaid ones forward by 1 month.
-  // The skipped month (e.g. fev) disappears; the parcela moves to next month (mar),
-  // then mar→apr, apr→may, may→jun — march is never lost.
+  // "Pular fevereiro" = a parcela de fev vai para março (marcada como pulada),
+  // e todas as seguintes se deslocam +1 mês também.
+  // Deslocamos idx e todos os seguintes, SEM checar paid (parcelas pagas ficam onde estão).
+  const skippedOriginalMonth = p.installments[idx].month;
   for(let i = idx; i < p.installments.length; i++) {
     if(!p.installments[i].paid) {
       p.installments[i].month = addMonths(p.installments[i].month, 1);
     }
   }
+  p.installments[idx].skipped = true;
+  p.installments[idx].paid = false;
+  p.installments[idx].skippedFrom = skippedOriginalMonth;
 
   save();
   closeAllPayForms();
@@ -1362,10 +1398,9 @@ function unskipInstallment(id, idx, e) {
   const p = purchases.find(x=>x.id===id);
   if(!p) return;
 
-  // Unmark the skipped installment
+  // Desfaz o skip: a parcela volta ao mês original e as seguintes voltam -1 mês
   p.installments[idx].skipped = false;
-
-  // Shift this installment AND all following unpaid ones back by 1 month
+  delete p.installments[idx].skippedFrom;
   for(let i = idx; i < p.installments.length; i++) {
     if(!p.installments[i].paid) {
       p.installments[i].month = addMonths(p.installments[i].month, -1);
@@ -1542,7 +1577,10 @@ function renderMes() {
         <div class="mes-item-right">
           <div class="mes-item-val" style="color:${inst.skipped?'var(--yellow)':color}">${fmt(p.installmentValue)}</div>
           ${inst.skipped
-            ? `<button class="pay-btn unpay" style="margin-top:6px;font-size:10px" onclick="unskipInstallment('${p.id}',${instIdx},event)">↩ Desfazer</button>`
+            ? `<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-top:6px">
+                <button class="pay-btn pay" onclick="togglePay('${p.id}',${instIdx},event)">✓ Pagar</button>
+                <button class="pay-btn unpay" style="font-size:10px" onclick="unskipInstallment('${p.id}',${instIdx},event)">↩ Desfazer</button>
+              </div>`
             : `<button class="pay-btn ${inst.paid?'unpay':'pay'}" style="margin-top:6px" onclick="togglePay('${p.id}',${instIdx},event)">
             ${inst.paid?'↩ Desfazer':'✓ Pagar'}
           </button>`}
