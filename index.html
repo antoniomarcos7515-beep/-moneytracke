@@ -1330,25 +1330,17 @@ function skipInstallment(id, idx, e) {
   const p = purchases.find(x=>x.id===id);
   if(!p) return;
 
-  // Mark current as skipped
+  // Mark current as skipped (stays in its original month, shown as yellow)
   p.installments[idx].skipped = true;
   p.installments[idx].paid = false;
 
   // Shift all following unpaid installments forward by 1 month
-  // This extends the end date of the purchase by 1 month
+  // The last installment naturally moves to one month later, extending the end date
   for(let i = idx + 1; i < p.installments.length; i++) {
     if(!p.installments[i].paid) {
       p.installments[i].month = addMonths(p.installments[i].month, 1);
     }
   }
-
-  // Add an extra installment at the end to cover the skipped month
-  const lastMonth = p.installments[p.installments.length - 1].month;
-  p.installments.push({
-    month: addMonths(lastMonth, 1),
-    paid: false,
-    skippedFrom: p.installments[idx].month // reference to the origin skipped month
-  });
 
   save();
   closeAllPayForms();
@@ -1371,10 +1363,6 @@ function unskipInstallment(id, idx, e) {
 
   // Unmark the skipped installment
   p.installments[idx].skipped = false;
-
-  // Remove the extra installment that was added at the end (the one with skippedFrom)
-  const extraIdx = p.installments.findIndex(i => i.skippedFrom === p.installments[idx].month);
-  if(extraIdx > -1) p.installments.splice(extraIdx, 1);
 
   // Shift all following unpaid installments back by 1 month
   for(let i = idx + 1; i < p.installments.length; i++) {
