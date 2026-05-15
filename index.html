@@ -305,6 +305,84 @@ header {
 .pay-btn.unpay { border-color: var(--border2); color: var(--text3); }
 .pay-btn.unpay:hover { background: var(--surface3); }
 
+/* PAID ROW subtle style */
+.inst-row-paid {
+  opacity: 0.65;
+}
+
+/* PAY FORM inline */
+.pay-form {
+  background: var(--surface2);
+  border: 1px solid rgba(0,212,160,0.25);
+  border-radius: var(--radius-xs);
+  padding: 12px 14px;
+  margin: 4px 0 8px;
+  display: flex; flex-direction: column; gap: 10px;
+  animation: slideUp 0.18s ease both;
+}
+.pay-form-row { display: flex; gap: 8px; }
+.pay-form-field { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.pay-form-field label { font-size: 10px; font-weight: 700; color: var(--emerald); text-transform: uppercase; letter-spacing: 0.8px; }
+.pay-form-field input {
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 9px 10px;
+  color: var(--text); font-size: 13px; font-family: var(--font); font-weight: 600;
+  outline: none; transition: border-color 0.2s;
+  width: 100%;
+}
+.pay-form-field input:focus { border-color: var(--emerald); }
+.pay-form-btns { display: flex; gap: 7px; }
+.pay-form-confirm {
+  flex: 1; padding: 9px; border-radius: 8px;
+  background: var(--emerald); color: #0a0f1e;
+  border: none; font-size: 12px; font-weight: 800;
+  font-family: var(--font); cursor: pointer; transition: all 0.15s;
+}
+.pay-form-confirm:hover { background: #00ebb3; }
+.pay-form-cancel {
+  padding: 9px 14px; border-radius: 8px;
+  background: transparent; color: var(--text3);
+  border: 1px solid var(--border2); font-size: 12px; font-weight: 600;
+  font-family: var(--font); cursor: pointer; transition: all 0.15s;
+}
+.pay-form-cancel:hover { border-color: var(--red); color: var(--red); }
+
+/* INSTALLMENT DIVIDER */
+.inst-divider {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 0 8px;
+}
+.inst-divider-line {
+  flex: 1; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,212,160,0.25), transparent);
+}
+.inst-divider-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+  background: var(--surface); padding: 5px 10px;
+  border-radius: 20px; border: 1px solid rgba(0,212,160,0.2);
+}
+.inst-divider-paid { color: var(--emerald); }
+.inst-divider-sep { color: var(--text3); }
+.inst-divider-open { color: var(--yellow); }
+
+/* INSTALLMENT SUMMARY BAR */
+.inst-summary-bar {
+  display: flex; align-items: center;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-xs); padding: 12px 14px;
+  margin-top: 14px; gap: 12px;
+}
+.inst-summary-bar.isb-done {
+  background: rgba(0,212,160,0.06); border-color: rgba(0,212,160,0.2);
+}
+.isb-item { flex: 1; }
+.isb-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); margin-bottom: 3px; }
+.isb-val { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.isb-paid .isb-val { color: var(--emerald); }
+.isb-open .isb-val { color: var(--yellow); }
+.isb-divider { width: 1px; height: 36px; background: var(--border2); flex-shrink: 0; }
+
 /* CARD ACTIONS */
 .card-actions {
   display: flex; gap: 8px; padding: 12px 16px 14px;
@@ -959,18 +1037,70 @@ function buildCard(p) {
   const done = paid === total;
   const color = cardColor(p);
 
+  // Find last paid installment index
+  let lastPaidIdx = -1;
+  for(let i = p.installments.length - 1; i >= 0; i--) {
+    if(p.installments[i].paid) { lastPaidIdx = i; break; }
+  }
+
+  // Calculate totals from last paid month forward
+  const totalPago = paid * p.installmentValue;
+  const totalRestante = (total - paid) * p.installmentValue;
+
+  // Build installment rows with payment date and value shown for paid ones
   const instRows = p.installments.map((inst,idx) => {
     const s = instStatus(inst.month,p.dueDay,inst.paid);
-    return `<div class="inst-row">
+    const isDivider = idx === lastPaidIdx + 1 && lastPaidIdx >= 0 && !done;
+
+    // For paid: show the due date as "paid date" and value
+    const dateLabel = inst.paid
+      ? `<span style="color:var(--emerald);font-weight:700">✓ Pago em ${fmtDate(inst.month,p.dueDay)}</span>`
+      : `<span style="color:${s.cls==='late'?'var(--red)':'var(--text2)'}">${fmtDate(inst.month,p.dueDay)}</span>`;
+
+    const dividerHtml = isDivider ? `
+      <div class="inst-divider">
+        <div class="inst-divider-line"></div>
+        <div class="inst-divider-label">
+          <span class="inst-divider-paid">✅ ${fmt(totalPago)} pago</span>
+          <span class="inst-divider-sep">·</span>
+          <span class="inst-divider-open">⏳ ${fmt(totalRestante)} em aberto</span>
+        </div>
+        <div class="inst-divider-line"></div>
+      </div>` : '';
+
+    return `${dividerHtml}<div class="inst-row ${inst.paid?'inst-row-paid':''}">
       <div class="inst-num ${s.cls}">${idx+1}</div>
       <div class="inst-info">
-        <div class="inst-date">${fmtDate(inst.month,p.dueDay)}</div>
-        <div class="inst-status-txt" style="color:${s.cls==='paid'?'var(--emerald)':s.cls==='late'?'var(--red)':'var(--text3)'}">${s.label}</div>
+        <div class="inst-date">${dateLabel}</div>
+        ${inst.paid
+          ? `<div class="inst-status-txt" style="color:var(--text3)">${fmt(p.installmentValue)}</div>`
+          : `<div class="inst-status-txt" style="color:${s.cls==='late'?'var(--red)':'var(--text3)'}">${s.label}</div>`
+        }
       </div>
-      <div class="inst-val">${fmt(p.installmentValue)}</div>
-      ${!done?`<button class="pay-btn ${inst.paid?'unpay':'pay'}" onclick="togglePay('${p.id}',${idx},event)">${inst.paid?'↩ Desfazer':'✓ Pagar'}</button>`:''}
+      <div class="inst-val" style="color:${inst.paid?'var(--emerald)':'var(--text2)'}">${fmt(p.installmentValue)}</div>
+      ${!done?`<button class="pay-btn ${inst.paid?'unpay':'pay'}" onclick="togglePay('${p.id}',${idx},event)">${inst.paid?'↩':'✓ Pagar'}</button>`:''}
     </div>`;
   }).join('');
+
+  // Summary bar at bottom of inst-wrap when there are paid installments
+  const summaryBar = paid > 0 && !done ? `
+    <div class="inst-summary-bar">
+      <div class="isb-item isb-paid">
+        <div class="isb-lbl">Total pago</div>
+        <div class="isb-val">${fmt(totalPago)}</div>
+      </div>
+      <div class="isb-divider"></div>
+      <div class="isb-item isb-open">
+        <div class="isb-lbl">Em aberto</div>
+        <div class="isb-val">${fmt(totalRestante)}</div>
+      </div>
+    </div>` : done ? `
+    <div class="inst-summary-bar isb-done">
+      <div class="isb-item isb-paid" style="flex:1;text-align:center">
+        <div class="isb-lbl">🎉 Totalmente quitado!</div>
+        <div class="isb-val">${fmt(totalPago)}</div>
+      </div>
+    </div>` : '';
 
   return `<div class="purchase-card" id="card-${p.id}">
     <div class="card-header" onclick="toggleCard('${p.id}')">
@@ -994,6 +1124,7 @@ function buildCard(p) {
     <div class="inst-wrap">
       <div class="inst-title">Parcelas</div>
       ${instRows}
+      ${summaryBar}
     </div>
     <div class="card-actions">
       <button class="action-btn edit" onclick="editPurchase('${p.id}',event)">
@@ -1013,16 +1144,108 @@ function toggleCard(id) {
 }
 
 // ── TOGGLE PAY ──
-function togglePay(id,idx,e) {
+let payFormOpen = null; // {purchaseId, instIdx}
+
+function openPayForm(id, idx, e) {
   e.stopPropagation();
   const p = purchases.find(x=>x.id===id);
   if(!p) return;
-  p.installments[idx].paid = !p.installments[idx].paid;
+
+  // Close any previously open form
+  closeAllPayForms();
+
+  payFormOpen = {id, idx};
+
+  // Build today's date as default
+  const now = new Date();
+  const todayVal = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+  const formId = `pay-form-${id}-${idx}`;
+  const form = document.createElement('div');
+  form.className = 'pay-form';
+  form.id = formId;
+  form.innerHTML = `
+    <div class="pay-form-row">
+      <div class="pay-form-field">
+        <label>Valor pago (R$)</label>
+        <input type="number" id="pf-val-${id}-${idx}" step="0.01" min="0.01"
+          placeholder="${p.installmentValue.toFixed(2)}"
+          value="${p.installmentValue.toFixed(2)}">
+      </div>
+      <div class="pay-form-field">
+        <label>Data do pagamento</label>
+        <input type="date" id="pf-date-${id}-${idx}" value="${todayVal}">
+      </div>
+    </div>
+    <div class="pay-form-btns">
+      <button class="pay-form-confirm" onclick="confirmPay('${id}',${idx},event)">✓ Confirmar Pagamento</button>
+      <button class="pay-form-cancel" onclick="cancelPayForm(event)">Cancelar</button>
+    </div>
+  `;
+
+  // Insert after the inst-row
+  const rowEl = document.getElementById(`inst-row-${id}-${idx}`);
+  if(rowEl) rowEl.insertAdjacentElement('afterend', form);
+}
+
+function confirmPay(id, idx, e) {
+  e.stopPropagation();
+  const p = purchases.find(x=>x.id===id);
+  if(!p) return;
+
+  const valInput = document.getElementById(`pf-val-${id}-${idx}`);
+  const dateInput = document.getElementById(`pf-date-${id}-${idx}`);
+
+  const paidValue = parseFloat(valInput?.value) || p.installmentValue;
+  const paidDate = dateInput?.value || null;
+
+  p.installments[idx].paid = true;
+  p.installments[idx].paidValue = paidValue;
+  p.installments[idx].paidDate = paidDate;
+
+  save();
+  closeAllPayForms();
+  if(activeTab==='lista') renderList();
+  else if(activeTab==='mes') renderMes();
+  else renderResumo();
+
+  // Re-expand the card
+  setTimeout(() => {
+    const card = document.getElementById('card-'+id);
+    if(card && !card.classList.contains('expanded')) card.classList.add('expanded');
+  }, 50);
+
+  showToast('✅ Parcela paga!');
+}
+
+function cancelPayForm(e) {
+  e.stopPropagation();
+  closeAllPayForms();
+}
+
+function closeAllPayForms() {
+  document.querySelectorAll('.pay-form').forEach(f => f.remove());
+  payFormOpen = null;
+}
+
+function unpayInstallment(id, idx, e) {
+  e.stopPropagation();
+  const p = purchases.find(x=>x.id===id);
+  if(!p) return;
+  p.installments[idx].paid = false;
+  p.installments[idx].paidValue = null;
+  p.installments[idx].paidDate = null;
   save();
   if(activeTab==='lista') renderList();
   else if(activeTab==='mes') renderMes();
   else renderResumo();
-  showToast(p.installments[idx].paid ? '✅ Parcela paga!' : '↩ Marcado como pendente');
+
+  setTimeout(() => {
+    const card = document.getElementById('card-'+id);
+    if(card && !card.classList.contains('expanded')) card.classList.add('expanded');
+  }, 50);
+
+  showToast('↩ Marcado como pendente');
 }
 
 // ── DELETE ──
@@ -1106,9 +1329,14 @@ function savePurchase(e) {
   if(editingId) {
     const idx = purchases.findIndex(p=>p.id===editingId);
     if(idx>-1) {
-      const oldPaid = purchases[idx].installments.map(i=>i.paid);
+      const oldInst = purchases[idx].installments;
       purchases[idx] = {...purchases[idx], name, totalValue:total, installmentValue, dueDay, category, emoji:currentEmoji,
-        installments: installments.map((inst,i)=>({...inst,paid:oldPaid[i]||false}))};
+        installments: installments.map((inst,i)=>({
+          ...inst,
+          paid: oldInst[i]?.paid||false,
+          paidValue: oldInst[i]?.paidValue||null,
+          paidDate: oldInst[i]?.paidDate||null
+        }))};
     }
     showToast('✅ Compra atualizada!');
   } else {
