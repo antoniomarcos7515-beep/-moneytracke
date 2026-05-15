@@ -1098,10 +1098,7 @@ function buildCard(p) {
       const paidTogether = inst.paidTogether ? ` <span style="font-size:10px;background:rgba(245,200,66,0.15);color:var(--yellow);padding:1px 6px;border-radius:10px;margin-left:4px">pago junto</span>` : '';
       dateLabel = `<span style="color:var(--emerald);font-weight:700">✓ Pago em ${fmtDate(inst.month,p.dueDay)}</span>${paidTogether}`;
     } else if(inst.skipped) {
-      // Find which month it was paid with
-      const nextPaid = p.installments[idx+1];
-      const paidWithMonth = nextPaid ? ` · pago em ${nextPaid.month ? nextPaid.month.split('-').reverse().slice(1).join('/') : ''}` : '';
-      dateLabel = `<span style="color:var(--yellow);font-weight:700">⏭ Pulado${paidWithMonth}</span>`;
+      dateLabel = `<span style="color:var(--yellow);font-weight:700">⏭ Pulado — adiado para o próximo mês</span>`;
     } else {
       dateLabel = `<span style="color:${s.cls==='late'?'var(--red)':'var(--text2)'}">${fmtDate(inst.month,p.dueDay)}</span>`;
     }
@@ -1121,7 +1118,7 @@ function buildCard(p) {
     if(inst.paid) {
       statusTxt = `<div class="inst-status-txt" style="color:var(--text3)">${fmt(inst.paidValue||p.installmentValue)}</div>`;
     } else if(inst.skipped) {
-      statusTxt = `<div class="inst-status-txt" style="color:var(--yellow)">Pago no mês seguinte</div>`;
+      statusTxt = `<div class="inst-status-txt" style="color:var(--yellow)">Parcela adiada — será paga no próximo mês</div>`;
     } else {
       statusTxt = `<div class="inst-status-txt" style="color:${s.cls==='late'?'var(--red)':'var(--text3)'}">${s.label}</div>`;
     }
@@ -1232,24 +1229,17 @@ function openPayForm(id, idx, e) {
   form.className = 'pay-form';
   form.id = formId;
 
-  // Check if there's a next installment to mark as "paid together"
+  // Check if there's a next installment to show skip option
   const hasNext = idx + 1 < p.installments.length;
   const skipOption = hasNext ? `
     <div class="pay-form-skip-divider">ou</div>
     <div class="pay-form-skip-row" onclick="skipInstallment('${id}',${idx},event)">
-      <span>⏭ Pulei este mês — vou pagar junto com o próximo</span>
+      <span>⏭ Pulei este mês — adiar para o mês seguinte</span>
     </div>` : '';
 
-  // If prev installment was skipped, suggest double value
-  const prevSkipped = p.installments[idx]?.hasPrevSkipped && idx > 0 && p.installments[idx-1]?.skipped;
-  const defaultValue = prevSkipped ? (p.installmentValue * 2).toFixed(2) : p.installmentValue.toFixed(2);
-  const prevSkippedNote = prevSkipped ? `
-    <div style="background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--yellow);font-weight:600">
-      ⚠️ A parcela anterior foi pulada. Valor sugerido já inclui as duas parcelas (${fmt(p.installmentValue * 2)}).
-    </div>` : '';
+  const defaultValue = p.installmentValue.toFixed(2);
 
   form.innerHTML = `
-    ${prevSkippedNote}
     <div class="pay-form-row">
       <div class="pay-form-field">
         <label>Valor pago (R$)</label>
@@ -1289,17 +1279,7 @@ function confirmPay(id, idx, e) {
   p.installments[idx].paidValue = paidValue;
   p.installments[idx].paidDate = paidDate;
 
-  // If prev was skipped and this is being paid, also mark prev as paid (together)
-  if(p.installments[idx].hasPrevSkipped && idx > 0 && p.installments[idx-1].skipped) {
-    p.installments[idx-1].paid = true;
-    p.installments[idx-1].skipped = false;
-    p.installments[idx-1].paidValue = paidValue;
-    p.installments[idx-1].paidDate = paidDate;
-    p.installments[idx].paidTogether = true;
-    showToast('✅ Parcela paga! (junto com a anterior)');
-  } else {
-    showToast('✅ Parcela paga!');
-  }
+  showToast('✅ Parcela paga!');
 
   save();
   closeAllPayForms();
@@ -1354,11 +1334,21 @@ function skipInstallment(id, idx, e) {
   p.installments[idx].skipped = true;
   p.installments[idx].paid = false;
 
-  // If next installment exists, mark it as "paidTogether" when it gets paid
-  // (just flag it so UI knows to show double-value option)
-  if(idx + 1 < p.installments.length) {
-    p.installments[idx+1].hasPrevSkipped = true;
+  // Shift all following unpaid installments forward by 1 month
+  // This extends the end date of the purchase by 1 month
+  for(let i = idx + 1; i < p.installments.length; i++) {
+    if(!p.installments[i].paid) {
+      p.installments[i].month = addMonths(p.installments[i].month, 1);
+    }
   }
+
+  // Add an extra installment at the end to cover the skipped month
+  const lastMonth = p.installments[p.installments.length - 1].month;
+  p.installments.push({
+    month: addMonths(lastMonth, 1),
+    paid: false,
+    skippedFrom: p.installments[idx].month // reference to the origin skipped month
+  });
 
   save();
   closeAllPayForms();
@@ -1371,17 +1361,28 @@ function skipInstallment(id, idx, e) {
     if(card && !card.classList.contains('expanded')) card.classList.add('expanded');
   }, 50);
 
-  showToast('⏭ Parcela marcada como pulada');
+  showToast('⏭ Parcela pulada — término adiado em 1 mês');
 }
 
 function unskipInstallment(id, idx, e) {
   e.stopPropagation();
   const p = purchases.find(x=>x.id===id);
   if(!p) return;
+
+  // Unmark the skipped installment
   p.installments[idx].skipped = false;
-  if(idx + 1 < p.installments.length) {
-    p.installments[idx+1].hasPrevSkipped = false;
+
+  // Remove the extra installment that was added at the end (the one with skippedFrom)
+  const extraIdx = p.installments.findIndex(i => i.skippedFrom === p.installments[idx].month);
+  if(extraIdx > -1) p.installments.splice(extraIdx, 1);
+
+  // Shift all following unpaid installments back by 1 month
+  for(let i = idx + 1; i < p.installments.length; i++) {
+    if(!p.installments[i].paid) {
+      p.installments[i].month = addMonths(p.installments[i].month, -1);
+    }
   }
+
   save();
   if(activeTab==='lista') renderList();
   else if(activeTab==='mes') renderMes();
@@ -1392,7 +1393,7 @@ function unskipInstallment(id, idx, e) {
     if(card && !card.classList.contains('expanded')) card.classList.add('expanded');
   }, 50);
 
-  showToast('↩ Pulo desfeito');
+  showToast('↩ Pulo desfeito — término voltou ao original');
 }
 
 // ── DELETE ──
