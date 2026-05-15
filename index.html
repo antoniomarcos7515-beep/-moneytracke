@@ -1130,11 +1130,15 @@ function buildCard(p) {
       } else if(inst.skipped) {
         actionBtn = `<button class="pay-btn unpay" onclick="unskipInstallment('${p.id}',${idx},event)" title="Desfazer pulo">↩</button>`;
       } else {
-        actionBtn = `<button class="pay-btn pay" onclick="togglePay('${p.id}',${idx},event)">✓ Pagar</button>`;
+        actionBtn = `
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+            <button class="pay-btn pay" onclick="togglePay('${p.id}',${idx},event)">✓ Pagar</button>
+            ${idx + 1 < p.installments.length ? `<button class="pay-btn skip" onclick="skipInstallment('${p.id}',${idx},event)">⏭ Pular</button>` : ''}
+          </div>`;
       }
     }
 
-    return `${dividerHtml}<div class="inst-row ${inst.paid?'inst-row-paid':inst.skipped?'inst-row-skipped':''}">
+    return `${dividerHtml}<div id="inst-row-${p.id}-${idx}" class="inst-row ${inst.paid?'inst-row-paid':inst.skipped?'inst-row-skipped':''}">
       <div class="inst-num ${s.cls}">${idx+1}</div>
       <div class="inst-info">
         <div class="inst-date">${dateLabel}</div>
@@ -1231,11 +1235,7 @@ function openPayForm(id, idx, e) {
 
   // Check if there's a next installment to show skip option
   const hasNext = idx + 1 < p.installments.length;
-  const skipOption = hasNext ? `
-    <div class="pay-form-skip-divider">ou</div>
-    <div class="pay-form-skip-row" onclick="skipInstallment('${id}',${idx},event)">
-      <span>⏭ Pulei este mês — adiar para o mês seguinte</span>
-    </div>` : '';
+  const skipOption = '';
 
   const defaultValue = p.installmentValue.toFixed(2);
 
