@@ -1334,9 +1334,10 @@ function skipInstallment(id, idx, e) {
   p.installments[idx].skipped = true;
   p.installments[idx].paid = false;
 
-  // Shift all following unpaid installments forward by 1 month
-  // The last installment naturally moves to one month later, extending the end date
-  for(let i = idx + 1; i < p.installments.length; i++) {
+  // Shift this installment AND all following unpaid ones forward by 1 month.
+  // The skipped month (e.g. fev) disappears; the parcela moves to next month (mar),
+  // then mar→apr, apr→may, may→jun — march is never lost.
+  for(let i = idx; i < p.installments.length; i++) {
     if(!p.installments[i].paid) {
       p.installments[i].month = addMonths(p.installments[i].month, 1);
     }
@@ -1364,8 +1365,8 @@ function unskipInstallment(id, idx, e) {
   // Unmark the skipped installment
   p.installments[idx].skipped = false;
 
-  // Shift all following unpaid installments back by 1 month
-  for(let i = idx + 1; i < p.installments.length; i++) {
+  // Shift this installment AND all following unpaid ones back by 1 month
+  for(let i = idx; i < p.installments.length; i++) {
     if(!p.installments[i].paid) {
       p.installments[i].month = addMonths(p.installments[i].month, -1);
     }
